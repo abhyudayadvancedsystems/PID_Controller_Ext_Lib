@@ -21,7 +21,7 @@ void PIDController::startAutoTune() {
     autoTuneDone = false;
 }
 
-bool PIDController::isAutoTuneFinished() const {
+bool PIDController::isAutoTuneFinished() { // <-- removed 'const'
     return autoTuneDone || tuner.Runtime(); // tuner.Runtime returns true when finished
 }
 

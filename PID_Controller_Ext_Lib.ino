@@ -9,32 +9,28 @@
 #include <DFRobot_GP8XXX.h>
 
 // ---------- Global variables ----------
-DFRobot_GP8XXX_IIC dac_i2c;
-M5DAC2 dac(&dac_i2c);  // M5DAC2 expects a pointer to the IIC DAC
+DFRobot_GP8XXX_IIC dac_i2c(12, DFGP8XXX_I2C_DEVICEADDR, &Wire); // fixed: added required args
+M5DAC2 dac(&dac_i2c);
 
 double rpm_input = 0;
 double dac_output = 0;
-double rpm_setpoint = INITIAL_TARGET_RPM;
+double rpm_setpoint = INITIAL_TARGET_RPM; // defined in CanRPM.h
 PIDController pid(&rpm_input, &dac_output, &rpm_setpoint);
 
-CanRPM canBus(CAN_RPM_ID); // CAN ID defined in CanRPM.h
+CanRPM canBus(CAN_RPM_ID); // defined in CanRPM.h
 DisplayManager display;
 
 void setup() {
   Serial.begin(115200);
 
-  // Initialize M5Stack
   auto cfg = M5.config();
   M5.begin(cfg);
   M5.Lcd.fillScreen(TFT_BLACK);
   M5.Lcd.setRotation(1);
 
-  // Initialize modules
   dac.begin();
   pid.begin();
   display.begin();
-
-  // No explicit begin() for CanRPM, assuming constructor does setup
 }
 
 void loop() {

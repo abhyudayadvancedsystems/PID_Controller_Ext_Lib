@@ -8,7 +8,7 @@ public:
     void begin();
     void update();
     void startAutoTune();
-    bool isAutoTuneFinished() const;
+    bool isAutoTuneFinished(); // <-- removed 'const' here
     double getOutput() const;
 
 private:
