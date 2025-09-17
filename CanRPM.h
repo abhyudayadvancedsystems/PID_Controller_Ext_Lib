@@ -1,95 +1,30 @@
-#ifndef CANRPM_H
-#define CANRPM_H
+#pragma once
+#include <driver/twai.h>
 
-#include <Arduino.h>
-#include <M5Unified.h>
-#include "PIDController.h"
-#include "M5DAC2.h"
-#include "DisplayManager.h"
+class CanRPM {
+public:
+    CanRPM(uint32_t canId, uint32_t timeoutMs=500)
+      : _canId(canId), _timeoutMs(timeoutMs), _lastRpm(0), _lastMsgTime(0) {}
 
-// ---------- Constants ----------
-constexpr uint32_t CAN_RPM_ID = 0x106;    // CAN ID for RPM
-constexpr float INITIAL_TARGET_RPM = 750.0f; // Idle RPM
-constexpr float TARGET_STEP = 5.0f;
-constexpr float TARGET_MIN  = 400.0f;
-constexpr float TARGET_MAX  = 6000.0f;
-
-// Soft ramp parameters
-constexpr float SOFT_RAMP_STEP = 0.5f; // increment in volts per loop
-
-// ---------- Objects ----------
-CanRPM rpmReader(CAN_RPM_ID);
-M5DAC2 dac;                 // Handles CH0/CH1 outputs
-PIDController pid;          // PID + autotune
-DisplayManager display;     // LVGL display manager
-
-// ---------- Runtime Variables ----------
-float targetRPM = INITIAL_TARGET_RPM;
-float rpmFilt = 0.0f;
-const float rpmAlpha = 0.2f;  // EMA filter
-float dacVoltage = 0.0f;       // Current DAC voltage
-bool autotuneDone = false;
-
-void setup() {
-    Serial.begin(115200);
-    auto cfg = M5.config();
-    M5.begin(cfg);
-    M5.Lcd.setRotation(1);
-    M5.Lcd.fillScreen(TFT_BLACK);
-
-    // Init DAC
-    dac.begin();
-    dac.setFromCH1Voltage(0.36f); // Initial safe voltage
-
-    // Init PID
-    pid.begin(0.0003, 0.0001, 0.0); // conservative starting Kp, Ki, Kd
-    pid.setOutputLimits(dac.CH1_MIN_VOLT, dac.CH1_MAX_VOLT);
-
-    // Init display
-    display.begin();
-    display.showMessage("Initializing...");
-}
-
-void loop() {
-    M5.update();
-
-    // Adjust target RPM via buttons
-    if (M5.BtnA.wasPressed()) targetRPM = min(TARGET_MAX, targetRPM + TARGET_STEP);
-    if (M5.BtnB.wasPressed()) targetRPM = max(TARGET_MIN, targetRPM - TARGET_STEP);
-
-    // Read RPM
-    bool commOk = rpmReader.update();
-    if (commOk) {
-        float rpmMeas = float(rpmReader.rpm());
-        rpmFilt = (1.0f - rpmAlpha) * rpmFilt + rpmAlpha * rpmMeas;
+    bool update() {
+      twai_message_t msg;
+      if (twai_receive(&msg, pdMS_TO_TICKS(10)) == ESP_OK &&
+          !msg.extd && msg.identifier == _canId && msg.data_length_code >= 2) {
+        uint8_t A = msg.data[0];
+        uint8_t B = msg.data[1];
+        _lastRpm = ((uint16_t(A) << 8) | uint16_t(B)) / 4;
+        _lastMsgTime = millis();
+        return true;
+      }
+      return false;
     }
 
-    // Trigger autotune once when idle reached
-    if (!autotuneDone && rpmFilt >= INITIAL_TARGET_RPM) {
-        pid.runAutoTune(targetRPM);
-        autotuneDone = true;
-    }
+    bool commOk() const { return (millis() - _lastMsgTime) <= _timeoutMs; }
 
-    // PID calculation
-    if (commOk) {
-        float pidOut = pid.compute(targetRPM, rpmFilt);
+    uint16_t rpm() const { return _lastRpm; }
 
-        // Soft ramp
-        if (pidOut > dacVoltage + SOFT_RAMP_STEP)
-            dacVoltage += SOFT_RAMP_STEP;
-        else if (pidOut < dacVoltage - SOFT_RAMP_STEP)
-            dacVoltage -= SOFT_RAMP_STEP;
-        else
-            dacVoltage = pidOut;
-
-        // Apply to DAC channels
-        dac.setFromCH1Voltage(dacVoltage);
-    }
-
-    // Update LVGL display
-    display.update(rpmFilt, dac.CH0_mv / 1000.0f, dac.CH1_mv / 1000.0f, targetRPM);
-
-    delay(5);
-}
-
-#endif // CANRPM_H
+private:
+    uint32_t _canId, _timeoutMs;
+    uint16_t _lastRpm;
+    unsigned long _lastMsgTime;
+};
