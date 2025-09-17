@@ -1,6 +1,8 @@
+#ifndef CANRPM_H
+#define CANRPM_H
+
 #include <Arduino.h>
 #include <M5Unified.h>
-#include "CanRPM.h"
 #include "PIDController.h"
 #include "M5DAC2.h"
 #include "DisplayManager.h"
@@ -89,3 +91,5 @@ void loop() {
 
     delay(5);
 }
+
+#endif // CANRPM_H
