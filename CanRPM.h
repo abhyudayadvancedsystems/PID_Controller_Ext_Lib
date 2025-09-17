@@ -1,6 +1,10 @@
 #pragma once
 #include <driver/twai.h>
 
+// ---- Add these lines at the top or before class ----
+#define INITIAL_TARGET_RPM 1000        // Default target RPM; change as needed
+#define CAN_RPM_ID 0x123               // CAN Bus RPM message ID; change as needed
+
 class CanRPM {
 public:
     CanRPM(uint32_t canId, uint32_t timeoutMs=500)
